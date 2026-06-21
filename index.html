@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<title>フォトスライド — Googleドライブ</title>
+
+<!-- iPhone/iPad: ホーム画面に追加すると全画面(standalone)で起動 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="フォトスライド">
+<meta name="theme-color" content="#14110E">
+
+<!-- ===================================================================
+     ★ 設定: ここに自分の値を入れてください（手順は別途案内）
+     - CLIENT_ID : Google Cloud の OAuth クライアントID（ウェブアプリ）
+     - API_KEY   : Google Cloud の APIキー（Picker API 用）
+     =================================================================== -->
+<script>
+  const CLIENT_ID = "ここにOAuthクライアントIDを貼る.apps.googleusercontent.com";
+  const API_KEY   = "ここにAPIキーを貼る";
+  const SCOPE     = "https://www.googleapis.com/auth/drive.file";
+</script>
+
+<style>
+  :root{
+    --bg:#14110E;        /* 暖かみのある深いチャコール（写真が映える） */
+    --surface:#1E1A16;
+    --surface-2:#272118;
+    --ink:#F2ECE3;       /* 暖色寄りのオフホワイト */
+    --muted:#9A8F80;
+    --line:rgba(255,255,255,.08);
+    --brass:#E0A458;     /* 写真立ての真鍮を思わせるアクセント */
+    --brass-deep:#C8893E;
+    --danger:#E5807A;
+    --serif:"Hiragino Mincho ProN","Yu Mincho",Georgia,serif;
+    --gothic:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;}
+  body{
+    font-family:var(--gothic);
+    background:var(--bg);
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior:none;
+  }
+
+  /* ---------- セットアップ画面 ---------- */
+  #setup{
+    min-height:100dvh;
+    display:flex;align-items:center;justify-content:center;
+    padding:max(24px,env(safe-area-inset-top)) 20px max(24px,env(safe-area-inset-bottom));
+  }
+  .card{
+    width:100%;max-width:440px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:6px;                 /* 写真立ての“台紙”を思わせる二重枠 */
+  }
+  .card-inner{
+    border:1px solid rgba(224,164,88,.22);
+    border-radius:13px;
+    padding:30px 26px 26px;
+  }
+  .wordmark{
+    font-family:var(--serif);
+    font-size:13px;letter-spacing:.42em;text-transform:uppercase;
+    color:var(--brass);margin:0 0 22px;font-weight:600;
+  }
+  h1{
+    font-family:var(--serif);
+    font-size:27px;line-height:1.3;margin:0 0 10px;font-weight:600;letter-spacing:.01em;
+  }
+  .lede{color:var(--muted);font-size:14px;line-height:1.75;margin:0 0 26px;}
+
+  .btn{
+    appearance:none;border:0;cursor:pointer;width:100%;
+    font-family:var(--gothic);font-size:15px;font-weight:600;
+    padding:15px 18px;border-radius:11px;
+    display:flex;align-items:center;justify-content:center;gap:10px;
+    transition:transform .08s ease, background .15s ease, opacity .15s ease;
+  }
+  .btn:active{transform:scale(.985);}
+  .btn-primary{background:var(--brass);color:#2A1C09;}
+  .btn-primary:active{background:var(--brass-deep);}
+  .btn-ghost{
+    background:var(--surface-2);color:var(--ink);
+    border:1px solid var(--line);
+  }
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn .ico{width:19px;height:19px;flex:0 0 auto;}
+
+  .step{margin-top:14px;}
+  .step-label{
+    font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--muted);margin:0 0 9px;font-weight:600;
+  }
+  .pick-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  @media (max-width:360px){.pick-row{grid-template-columns:1fr;}}
+
+  .hint{font-size:12.5px;color:var(--muted);line-height:1.7;margin:16px 0 0;}
+  .hint b{color:var(--ink);font-weight:600;}
+
+  .status{
+    margin-top:18px;min-height:20px;font-size:13px;line-height:1.6;
+    display:flex;align-items:center;gap:9px;color:var(--muted);
+  }
+  .status.err{color:var(--danger);}
+  .spinner{
+    width:15px;height:15px;border-radius:50%;flex:0 0 auto;
+    border:2px solid rgba(255,255,255,.18);border-top-color:var(--brass);
+    animation:spin .7s linear infinite;display:none;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .loading .spinner{display:block;}
+
+  /* ---------- スライドショー ---------- */
+  #player{position:fixed;inset:0;background:#000;display:none;z-index:50;}
+  #player.on{display:block;}
+  .layer{
+    position:absolute;inset:0;
+    background-position:center;background-repeat:no-repeat;background-size:contain;
+    opacity:0;transition:opacity .9s ease;
+  }
+  .layer.fill{background-size:cover;}
+  .layer.visible{opacity:1;}
+  /* ほのかなビネットで写真を引き締める */
+  .vignette{position:absolute;inset:0;pointer-events:none;
+    box-shadow:inset 0 0 180px 30px rgba(0,0,0,.55);}
+
+  /* コントロール（タップで表示、数秒で自動的に隠れる） */
+  .hud{position:absolute;inset:0;z-index:2;opacity:0;transition:opacity .3s ease;pointer-events:none;}
+  .hud.show{opacity:1;pointer-events:auto;}
+  .hud-top,.hud-bottom{
+    position:absolute;left:0;right:0;display:flex;align-items:center;
+    padding:14px 16px;
+    padding-top:calc(14px + env(safe-area-inset-top));
+  }
+  .hud-top{top:0;justify-content:space-between;gap:12px;
+    background:linear-gradient(to bottom,rgba(0,0,0,.62),rgba(0,0,0,0));}
+  .hud-bottom{bottom:0;flex-direction:column;gap:14px;
+    padding-bottom:calc(18px + env(safe-area-inset-bottom));
+    background:linear-gradient(to top,rgba(0,0,0,.66),rgba(0,0,0,0));}
+  .folder-name{font-family:var(--serif);font-size:15px;font-weight:600;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .counter{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;flex:0 0 auto;}
+
+  .transport{display:flex;align-items:center;gap:22px;}
+  .iconbtn{
+    appearance:none;border:0;background:rgba(255,255,255,.10);
+    color:var(--ink);border-radius:50%;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+    backdrop-filter:blur(6px);transition:background .15s,transform .08s;
+  }
+  .iconbtn:active{transform:scale(.92);}
+  .iconbtn.lg{width:66px;height:66px;}
+  .iconbtn.sm{width:48px;height:48px;}
+  .iconbtn svg{width:50%;height:50%;}
+
+  .opts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;}
+  .chip{
+    appearance:none;border:1px solid var(--line);background:rgba(255,255,255,.05);
+    color:var(--muted);font-family:var(--gothic);font-size:12.5px;font-weight:600;
+    padding:7px 13px;border-radius:999px;cursor:pointer;transition:all .14s;
+    font-variant-numeric:tabular-nums;
+  }
+  .chip.active{background:var(--brass);border-color:var(--brass);color:#2A1C09;}
+  .exit{margin-left:auto;}
+
+  .toast{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    background:rgba(0,0,0,.7);color:#fff;padding:14px 20px;border-radius:12px;
+    font-size:14px;z-index:3;opacity:0;transition:opacity .25s;backdrop-filter:blur(8px);
+    text-align:center;line-height:1.6;max-width:80%;
+  }
+  .toast.show{opacity:1;}
+</style>
+</head>
+<body>
+
+<!-- ===================== セットアップ ===================== -->
+<section id="setup">
+  <div class="card">
+    <div class="card-inner">
+      <p class="wordmark">Photo Slide</p>
+      <h1>ドライブの写真を<br>2秒スライドショーに。</h1>
+      <p class="lede">自分のGoogleドライブのフォルダを選ぶと、中の写真を高画質で順に表示します。選んだフォルダ以外には一切アクセスしません。</p>
+
+      <button id="signin" class="btn btn-primary">
+        <svg class="ico" viewBox="0 0 24 24" fill="currentColor"><path d="M12 11v2h5.5c-.2 1.3-1.6 3.9-5.5 3.9-3.3 0-6-2.7-6-6s2.7-6 6-6c1.9 0 3.1.8 3.8 1.5l2.6-2.5C16.7 2.9 14.6 2 12 2 6.9 2 2.8 6.1 2.8 11.2S6.9 20.4 12 20.4c6 0 9.9-4.2 9.9-10.1 0-.7-.1-1.2-.2-1.7H12z"/></svg>
+        Googleにログイン
+      </button>
+
+      <div class="step">
+        <p class="step-label">写真の選び方</p>
+        <div class="pick-row">
+          <button id="pickFolder" class="btn btn-ghost" disabled>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+            フォルダで選ぶ
+          </button>
+          <button id="pickPhotos" class="btn btn-ghost" disabled>
+            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="M21 15l-5-5L7 18"/></svg>
+            写真を複数選ぶ
+          </button>
+        </div>
+      </div>
+
+      <p class="hint"><b>フォルダで選ぶ</b>＝フォルダごと一括（おすすめ）。うまく読み込めない時は<b>写真を複数選ぶ</b>を使ってください（確実に表示できます）。</p>
+
+      <div id="status" class="status"><span class="spinner"></span><span id="statusText"></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== プレーヤー ===================== -->
+<section id="player">
+  <div class="layer" id="layerA"></div>
+  <div class="layer" id="layerB"></div>
+  <div class="vignette"></div>
+  <div class="toast" id="toast"></div>
+
+  <div class="hud" id="hud">
+    <div class="hud-top">
+      <span class="folder-name" id="folderName">写真</span>
+      <span class="counter" id="counter">0 / 0</span>
+    </div>
+
+    <div class="hud-bottom">
+      <div class="transport">
+        <button class="iconbtn sm" id="prev" aria-label="前へ">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 5l-7 7 7 7V5z"/></svg>
+        </button>
+        <button class="iconbtn lg" id="playpause" aria-label="再生/一時停止">
+          <svg id="pauseIco" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.5" height="14" rx="1"/><rect x="13.5" y="5" width="3.5" height="14" rx="1"/></svg>
+          <svg id="playIco" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M7 5l12 7-12 7V5z"/></svg>
+        </button>
+        <button class="iconbtn sm" id="next" aria-label="次へ">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8.5 5l7 7-7 7V5z"/></svg>
+        </button>
+      </div>
+
+      <div class="opts">
+        <button class="chip interval active" data-ms="2000">2秒</button>
+        <button class="chip interval" data-ms="3000">3秒</button>
+        <button class="chip interval" data-ms="5000">5秒</button>
+        <button class="chip interval" data-ms="10000">10秒</button>
+        <button class="chip" id="shuffle">シャッフル</button>
+        <button class="chip" id="fitmode">全面表示</button>
+        <button class="chip exit" id="exit">終了</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Google ライブラリ -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="https://apis.google.com/js/api.js"></script>
+
+<script>
+/* ============================================================
+   状態
+   ============================================================ */
+let accessToken = null;
+let tokenClient = null;
+let pickerReady = false;
+
+let photos = [];          // [{id,name}]
+let order = [];           // 表示順（シャッフル対応）のインデックス配列
+let pos = 0;              // order内の現在位置
+let playing = true;
+let intervalMs = 2000;
+let timer = null;
+let fillMode = false;
+let shuffled = false;
+
+const objectUrls = new Map();   // photosのindex -> objectURL（簡易キャッシュ）
+let activeLayer = null;
+
+/* DOM */
+const $ = id => document.getElementById(id);
+const statusBox = $("status"), statusText = $("statusText");
+
+/* ============================================================
+   ステータス表示
+   ============================================================ */
+function setStatus(msg, {loading=false, err=false}={}){
+  statusText.textContent = msg || "";
+  statusBox.classList.toggle("loading", loading);
+  statusBox.classList.toggle("err", err);
+}
+function toast(msg, ms=1600){
+  const t=$("toast"); t.textContent=msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t=setTimeout(()=>t.classList.remove("show"), ms);
+}
+
+/* ============================================================
+   Picker ライブラリ読み込み
+   ============================================================ */
+window.addEventListener("load", ()=>{
+  gapi.load("picker", ()=>{ pickerReady = true; });
+});
+
+/* ============================================================
+   認証（Google Identity Services / drive.file）
+   ============================================================ */
+$("signin").addEventListener("click", ()=>{
+  if(CLIENT_ID.startsWith("ここに")){
+    setStatus("CLIENT_ID と API_KEY が未設定です。HTMLの上部を編集してください。", {err:true});
+    return;
+  }
+  if(!tokenClient){
+    tokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: CLIENT_ID,
+      scope: SCOPE,
+      callback: (resp)=>{
+        if(resp.error){ setStatus("ログインに失敗しました（"+resp.error+"）", {err:true}); return; }
+        accessToken = resp.access_token;
+        $("pickFolder").disabled = false;
+        $("pickPhotos").disabled = false;
+        setStatus("ログイン済み。フォルダまたは写真を選んでください。");
+      },
+    });
+  }
+  setStatus("Googleの画面でログインしてください…", {loading:true});
+  tokenClient.requestAccessToken({ prompt: accessToken ? "" : "consent" });
+});
+
+/* 401時にトークンを取り直す */
+function refreshToken(){
+  return new Promise((resolve,reject)=>{
+    if(!tokenClient) return reject(new Error("not signed in"));
+    const cb = tokenClient.callback;
+    tokenClient.callback = (resp)=>{
+      tokenClient.callback = cb;
+      if(resp.error) reject(new Error(resp.error));
+      else { accessToken = resp.access_token; resolve(accessToken); }
+    };
+    tokenClient.requestAccessToken({ prompt: "" });
+  });
+}
+
+/* ============================================================
+   Picker を開く
+   ============================================================ */
+$("pickFolder").addEventListener("click", ()=> openPicker("folder"));
+$("pickPhotos").addEventListener("click", ()=> openPicker("photos"));
+
+function openPicker(kind){
+  if(!pickerReady){ setStatus("準備中です。数秒後にもう一度…", {loading:true}); return; }
+  let view;
+  const builder = new google.picker.PickerBuilder()
+    .setDeveloperKey(API_KEY)
+    .setOAuthToken(accessToken);
+
+  if(kind==="folder"){
+    view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+      .setSelectFolderEnabled(true)
+      .setIncludeFolders(true)
+      .setMimeTypes("application/vnd.google-apps.folder");
+    builder.setTitle("スライドショーにするフォルダを選ぶ");
+  }else{
+    view = new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES)
+      .setIncludeFolders(true)
+      .setMimeTypes("image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/bmp,image/tiff");
+    builder.enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
+      .setTitle("写真を選ぶ（複数可）");
+  }
+
+  builder.addView(view)
+    .setCallback((data)=> pickerCallback(kind, data))
+    .build()
+    .setVisible(true);
+}
+
+async function pickerCallback(kind, data){
+  if(data.action !== google.picker.Action.PICKED) return;
+  const docs = data.docs || [];
+  if(!docs.length) return;
+
+  try{
+    if(kind==="folder"){
+      const folder = docs[0];
+      setStatus("「"+folder.name+"」の写真を読み込み中…", {loading:true});
+      const files = await listImagesInFolder(folder.id);
+      if(!files.length){
+        setStatus("このフォルダに表示できる写真が見つかりませんでした。", {err:true});
+        return;
+      }
+      startSlideshow(folder.name, files);
+    }else{
+      const files = docs
+        .filter(d => (d.mimeType||"").startsWith("image/"))
+        .map(d => ({id:d.id, name:d.name}));
+      if(!files.length){ setStatus("写真が選ばれていません。", {err:true}); return; }
+      startSlideshow(files.length+"枚の写真", files);
+    }
+  }catch(e){
+    console.error(e);
+    if(kind==="folder"){
+      setStatus("フォルダ内の取得に失敗しました。「写真を複数選ぶ」でお試しください。", {err:true});
+    }else{
+      setStatus("読み込みに失敗しました（"+e.message+"）", {err:true});
+    }
+  }
+}
+
+/* ============================================================
+   フォルダ内の画像一覧（Drive API / ページネーション対応）
+   ============================================================ */
+async function listImagesInFolder(folderId){
+  let files=[], pageToken="";
+  do{
+    const params = new URLSearchParams({
+      q: `'${folderId}' in parents and mimeType contains 'image/' and trashed=false`,
+      fields: "nextPageToken, files(id,name)",
+      orderBy: "name_natural",
+      pageSize: "200",
+      supportsAllDrives: "true",
+      includeItemsFromAllDrives: "true",
+    });
+    if(pageToken) params.set("pageToken", pageToken);
+    const res = await driveFetch("https://www.googleapis.com/drive/v3/files?"+params.toString());
+    if(!res.ok) throw new Error("list "+res.status);
+    const json = await res.json();
+    files = files.concat(json.files || []);
+    pageToken = json.nextPageToken || "";
+  }while(pageToken);
+  return files;
+}
+
+/* Authorization付きfetch。401なら一度だけトークン再取得して再試行 */
+async function driveFetch(url){
+  let res = await fetch(url, {headers:{Authorization:"Bearer "+accessToken}});
+  if(res.status === 401){
+    await refreshToken();
+    res = await fetch(url, {headers:{Authorization:"Bearer "+accessToken}});
+  }
+  return res;
+}
+
+/* ============================================================
+   画像の取得・キャッシュ・プリロード（高画質: 原寸バイトを取得）
+   ============================================================ */
+async function loadImage(idx){
+  if(objectUrls.has(idx)) return objectUrls.get(idx);
+  const f = photos[idx];
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+  if(!res.ok) throw new Error("media "+res.status);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  objectUrls.set(idx, url);
+  return url;
+}
+function preloadAround(centerPos){
+  // 現在位置の前後を先読みして、2秒切替を滑らかに
+  for(const d of [1,2]){
+    const idx = order[(centerPos+d) % order.length];
+    loadImage(idx).catch(()=>{});
+  }
+}
+function revokeFar(centerPos){
+  const keep = new Set();
+  for(const d of [-1,0,1,2]) keep.add(order[(centerPos+d+order.length)%order.length]);
+  for(const [idx,url] of objectUrls){
+    if(!keep.has(idx)){ URL.revokeObjectURL(url); objectUrls.delete(idx); }
+  }
+}
+
+/* ============================================================
+   スライドショー開始
+   ============================================================ */
+function startSlideshow(name, files){
+  photos = files;
+  shuffled = false;
+  $("shuffle").classList.remove("active");
+  rebuildOrder();
+  pos = 0;
+  $("folderName").textContent = name;
+  setStatus("");
+
+  activeLayer = $("layerA");
+  $("player").classList.add("on");
+  document.body.style.background = "#000";
+
+  show(0).then(()=>{ play(); flashHud(); });
+}
+
+function rebuildOrder(){
+  order = photos.map((_,i)=>i);
+  if(shuffled){
+    for(let i=order.length-1;i>0;i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [order[i],order[j]]=[order[j],order[i]];
+    }
+  }
+}
+
+async function show(newPos){
+  const total = order.length;
+  newPos = ((newPos % total) + total) % total;
+  const idx = order[newPos];
+  let url;
+  try{ url = await loadImage(idx); }
+  catch(e){
+    console.error(e);
+    // 1枚読めなくても止めない: 次へ送る
+    if(total>1){ pos=newPos; return show(newPos+1); }
+    return;
+  }
+  const incoming = (activeLayer===$("layerA")) ? $("layerB") : $("layerA");
+  incoming.classList.toggle("fill", fillMode);
+  incoming.style.backgroundImage = `url("${url}")`;
+  // 反映を確実にしてからフェード
+  void incoming.offsetWidth;
+  incoming.classList.add("visible");
+  activeLayer.classList.remove("visible");
+  activeLayer = incoming;
+
+  pos = newPos;
+  $("counter").textContent = (newPos+1)+" / "+total;
+  preloadAround(newPos);
+  revokeFar(newPos);
+}
+
+/* ============================================================
+   再生制御
+   ============================================================ */
+function play(){
+  playing = true;
+  $("pauseIco").style.display=""; $("playIco").style.display="none";
+  clearInterval(timer);
+  timer = setInterval(()=>{ if(playing) show(pos+1); }, intervalMs);
+}
+function pause(){
+  playing = false;
+  $("pauseIco").style.display="none"; $("playIco").style.display="";
+  clearInterval(timer);
+}
+function togglePlay(){ playing ? pause() : play(); }
+
+$("playpause").addEventListener("click", togglePlay);
+$("next").addEventListener("click", ()=>{ show(pos+1); if(playing) play(); });
+$("prev").addEventListener("click", ()=>{ show(pos-1); if(playing) play(); });
+
+/* 間隔チップ */
+document.querySelectorAll(".chip.interval").forEach(chip=>{
+  chip.addEventListener("click", ()=>{
+    document.querySelectorAll(".chip.interval").forEach(c=>c.classList.remove("active"));
+    chip.classList.add("active");
+    intervalMs = parseInt(chip.dataset.ms,10);
+    toast(chip.textContent+"ごとに切り替え");
+    if(playing) play();
+  });
+});
+
+/* シャッフル */
+$("shuffle").addEventListener("click", ()=>{
+  shuffled = !shuffled;
+  $("shuffle").classList.toggle("active", shuffled);
+  rebuildOrder();
+  pos = 0;
+  toast(shuffled ? "シャッフル オン" : "シャッフル オフ");
+  show(0); if(playing) play();
+});
+
+/* 表示モード: 余白あり(contain) / 全面(cover) */
+$("fitmode").addEventListener("click", ()=>{
+  fillMode = !fillMode;
+  $("fitmode").classList.toggle("active", fillMode);
+  $("layerA").classList.toggle("fill", fillMode);
+  $("layerB").classList.toggle("fill", fillMode);
+  toast(fillMode ? "全面表示（はみ出し部分はカット）" : "全体表示（余白あり）");
+});
+
+/* 終了 */
+$("exit").addEventListener("click", ()=>{
+  pause();
+  $("player").classList.remove("on");
+  document.body.style.background = "var(--bg)";
+  for(const [,url] of objectUrls) URL.revokeObjectURL(url);
+  objectUrls.clear();
+  setStatus("もう一度フォルダや写真を選べます。");
+});
+
+/* ============================================================
+   HUD（タップで表示 → 自動で隠れる）
+   ============================================================ */
+const hud = $("hud");
+function flashHud(){
+  hud.classList.add("show");
+  clearTimeout(flashHud._t);
+  flashHud._t = setTimeout(()=>hud.classList.remove("show"), 3200);
+}
+$("player").addEventListener("click", (e)=>{
+  // コントロール自体のタップは無視
+  if(e.target.closest(".iconbtn, .chip")) { flashHud(); return; }
+  hud.classList.contains("show") ? hud.classList.remove("show") : flashHud();
+});
+
+/* キーボード操作（iPad+外付けキーボード等） */
+window.addEventListener("keydown",(e)=>{
+  if(!$("player").classList.contains("on")) return;
+  if(e.key===" "){ e.preventDefault(); togglePlay(); flashHud(); }
+  else if(e.key==="ArrowRight"){ show(pos+1); if(playing) play(); flashHud(); }
+  else if(e.key==="ArrowLeft"){ show(pos-1); if(playing) play(); flashHud(); }
+  else if(e.key==="Escape"){ $("exit").click(); }
+});
+
+/* 画面を離れたら一時停止（バッテリー配慮） */
+document.addEventListener("visibilitychange", ()=>{
+  if(document.hidden && playing) clearInterval(timer);
+  else if(!document.hidden && playing) play();
+});
+</script>
+</body>
+</html>
