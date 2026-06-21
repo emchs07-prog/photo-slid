@@ -19,10 +19,11 @@
      =================================================================== -->
 <script>
   const CLIENT_ID = "760032808755-d31mi7s0tillj7qcbtq1cl0mc5gbrp83.apps.googleusercontent.com";
-  const API_KEY   = "AIzaSyCJok1NERJS2dLteii-uaEgSarQdXT6Rzc";
+  const API_KEY   = "AIzaSyCJok1NERJS2dLteii-uaEgSarQdXT6Rzc
+";
   const SCOPE     = "https://www.googleapis.com/auth/drive.file";
   const APP_NAME    = "Hideki Slide Show";
-  const APP_VERSION = "1.03";
+  const APP_VERSION = "1.04";
 </script>
 
 <style>
@@ -389,6 +390,7 @@ function openPicker(kind){
 }
 
 async function pickerCallback(kind, data){
+  console.log("[診断1] Picker callback: action=", data.action, " 選択数=", (data.docs||[]).length);
   if(data.action !== google.picker.Action.PICKED) return;
   const docs = data.docs || [];
   if(!docs.length) return;
@@ -460,7 +462,9 @@ async function driveFetch(url){
 async function loadImage(idx){
   if(objectUrls.has(idx)) return objectUrls.get(idx);
   const f = photos[idx];
+  console.log("[診断3] 画像取得 開始: id=", f.id);
   const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
+  console.log("[診断4] 画像取得 応答: status=", res.status);
   if(!res.ok) throw new Error("media "+res.status);
   const blob = await res.blob();
   const url = URL.createObjectURL(blob);
@@ -486,6 +490,7 @@ function revokeFar(centerPos){
    スライドショー開始
    ============================================================ */
 function startSlideshow(name, files){
+  console.log("[診断2] スライドショー開始: 写真", files.length, "枚");
   photos = files;
   shuffled = false;
   $("shuffle").classList.remove("active");
