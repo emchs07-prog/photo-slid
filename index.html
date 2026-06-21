@@ -21,6 +21,8 @@
   const CLIENT_ID = "760032808755-d31mi7s0tillj7qcbtq1cl0mc5gbrp83.apps.googleusercontent.com";
   const API_KEY   = "AIzaSyCJok1NERJS2dLteii-uaEgSarQdXT6Rzc";
   const SCOPE     = "https://www.googleapis.com/auth/drive.file";
+  const APP_NAME    = "Hideki Slide Show";
+  const APP_VERSION = "1.00";
 </script>
 
 <style>
@@ -67,8 +69,13 @@
   }
   .wordmark{
     font-family:var(--serif);
-    font-size:13px;letter-spacing:.42em;text-transform:uppercase;
-    color:var(--brass);margin:0 0 22px;font-weight:600;
+    font-size:14px;letter-spacing:.18em;
+    color:var(--brass);margin:0 0 6px;font-weight:600;
+    display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;
+  }
+  .wordmark .ver{
+    font-family:var(--gothic);
+    font-size:11px;letter-spacing:.04em;color:var(--muted);font-weight:600;
   }
   h1{
     font-family:var(--serif);
@@ -185,7 +192,7 @@
 <section id="setup">
   <div class="card">
     <div class="card-inner">
-      <p class="wordmark">Photo Slide</p>
+      <p class="wordmark"><span id="appName">Hideki Slide Show</span><span class="ver" id="appVer">ver1.00</span></p>
       <h1>ドライブの写真を<br>2秒スライドショーに。</h1>
       <p class="lede">自分のGoogleドライブのフォルダを選ぶと、中の写真を高画質で順に表示します。選んだフォルダ以外には一切アクセスしません。</p>
 
@@ -301,6 +308,11 @@ function toast(msg, ms=1600){
    ============================================================ */
 window.addEventListener("load", ()=>{
   gapi.load("picker", ()=>{ pickerReady = true; });
+  // プログラム名・バージョンを画面とタイトルに反映（確認用）
+  $("appName").textContent = APP_NAME;
+  $("appVer").textContent  = "ver" + APP_VERSION;
+  document.title = APP_NAME + " ver" + APP_VERSION;
+  console.log(APP_NAME + " ver" + APP_VERSION);
 });
 
 /* ============================================================
