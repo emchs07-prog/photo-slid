@@ -22,7 +22,7 @@
   const API_KEY   = "AIzaSyCJok1NERJS2dLteii-uaEgSarQdXT6Rzc";
   const SCOPE     = "https://www.googleapis.com/auth/drive.file";
   const APP_NAME    = "Hideki Slide Show";
-  const APP_VERSION = "1.00";
+  const APP_VERSION = "1.01";
 </script>
 
 <style>
@@ -368,14 +368,12 @@ function openPicker(kind){
     .setOAuthToken(accessToken);
 
   if(kind==="folder"){
-    view = new google.picker.DocsView(google.picker.ViewId.DOCS)
-      .setParent("root")
+    view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
       .setIncludeFolders(true)
       .setSelectFolderEnabled(true);
-    builder.setTitle("写真フォルダを開いて『選択』を押してください");
+    builder.setTitle("写真フォルダを選んで『選択』を押してください");
   }else{
     view = new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES)
-      .setParent("root")
       .setIncludeFolders(true)
       .setMimeTypes("image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/bmp,image/tiff");
     builder.enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
