@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- ============================================================
-     Hideki Slide Show   ver1.06
+     Hideki Slide Show   ver1.07
      ============================================================ -->
 <html lang="ja">
 <head>
@@ -24,7 +24,7 @@
 <script>
   const SCOPE       = "https://www.googleapis.com/auth/drive.file";
   const APP_NAME    = "Hideki Slide Show";
-  const APP_VERSION = "1.06";
+  const APP_VERSION = "1.07";
 </script>
 
 <style>
@@ -374,10 +374,10 @@ function openPicker(kind){
     .setOrigin(window.location.protocol + "//" + window.location.host);
 
   if(kind==="folder"){
-    view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
+    view = new google.picker.DocsView(google.picker.ViewId.DOCS)
       .setIncludeFolders(true)
       .setSelectFolderEnabled(true);
-    builder.setTitle("写真フォルダを選んで『選択』を押してください");
+    builder.setTitle("写真フォルダに入って、下部の『選択』を押してください");
   }else{
     view = new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES)
       .setIncludeFolders(true)
@@ -393,7 +393,6 @@ function openPicker(kind){
 }
 
 async function pickerCallback(kind, data){
-  console.log("[診断1] Picker callback: action=", data.action, " 選択数=", (data.docs||[]).length);
   if(data.action !== google.picker.Action.PICKED) return;
   const docs = data.docs || [];
   if(!docs.length) return;
@@ -461,15 +460,42 @@ async function driveFetch(url){
 
 /* ============================================================
    画像の取得・キャッシュ・プリロード（高画質: 原寸バイトを取得）
+   HEIC（iPhone写真）対応:
+   - Safari は標準で HEIC を表示できるのでそのまま使う（高速）
+   - Chrome 等は表示できないので heic2any で JPEG に変換する
    ============================================================ */
+const isSafari = /^((?!chrome|crios|android|edg|opr).)*safari/i.test(navigator.userAgent);
+let heicLibPromise = null;
+function loadHeicLib(){
+  if(heicLibPromise) return heicLibPromise;
+  heicLibPromise = new Promise((resolve, reject)=>{
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js";
+    s.onload = ()=>resolve();
+    s.onerror = ()=>reject(new Error("heic2any 読み込み失敗"));
+    document.head.appendChild(s);
+  });
+  return heicLibPromise;
+}
+async function maybeConvertHeic(blob, name){
+  const t = (blob.type || "").toLowerCase();
+  const isHeic = t.includes("heic") || t.includes("heif") || /\.heic$|\.heif$/i.test(name || "");
+  if(isHeic && !isSafari){
+    try{
+      await loadHeicLib();
+      const out = await heic2any({ blob, toType: "image/jpeg", quality: 0.85 });
+      return Array.isArray(out) ? out[0] : out;
+    }catch(e){ console.warn("HEIC変換に失敗:", e); return blob; }
+  }
+  return blob;
+}
 async function loadImage(idx){
   if(objectUrls.has(idx)) return objectUrls.get(idx);
   const f = photos[idx];
-  console.log("[診断3] 画像取得 開始: id=", f.id);
   const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`);
-  console.log("[診断4] 画像取得 応答: status=", res.status);
   if(!res.ok) throw new Error("media "+res.status);
-  const blob = await res.blob();
+  let blob = await res.blob();
+  blob = await maybeConvertHeic(blob, f.name);
   const url = URL.createObjectURL(blob);
   objectUrls.set(idx, url);
   return url;
@@ -493,7 +519,6 @@ function revokeFar(centerPos){
    スライドショー開始
    ============================================================ */
 function startSlideshow(name, files){
-  console.log("[診断2] スライドショー開始: 写真", files.length, "枚");
   photos = files;
   shuffled = false;
   $("shuffle").classList.remove("active");
