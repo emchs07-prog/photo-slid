@@ -22,7 +22,7 @@
   const API_KEY   = "AIzaSyCJok1NERJS2dLteii-uaEgSarQdXT6Rzc";
   const SCOPE     = "https://www.googleapis.com/auth/drive.file";
   const APP_NAME    = "Hideki Slide Show";
-  const APP_VERSION = "1.02";
+  const APP_VERSION = "1.03";
 </script>
 
 <style>
@@ -366,7 +366,8 @@ function openPicker(kind){
   let view;
   const builder = new google.picker.PickerBuilder()
     .setDeveloperKey(API_KEY)
-    .setOAuthToken(accessToken);
+    .setOAuthToken(accessToken)
+    .setOrigin(window.location.protocol + "//" + window.location.host);
 
   if(kind==="folder"){
     view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
