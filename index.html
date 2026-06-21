@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- ============================================================
-     Hideki Slide Show   ver1.07
+     Hideki Slide Show   ver1.08
      ============================================================ -->
 <html lang="ja">
 <head>
@@ -24,7 +24,7 @@
 <script>
   const SCOPE       = "https://www.googleapis.com/auth/drive.file";
   const APP_NAME    = "Hideki Slide Show";
-  const APP_VERSION = "1.07";
+  const APP_VERSION = "1.08";
 </script>
 
 <style>
@@ -204,20 +204,14 @@
       </button>
 
       <div class="step">
-        <p class="step-label">写真の選び方</p>
-        <div class="pick-row">
-          <button id="pickFolder" class="btn btn-ghost" disabled>
-            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
-            フォルダで選ぶ
-          </button>
-          <button id="pickPhotos" class="btn btn-ghost" disabled>
-            <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="14" rx="2"/><circle cx="8.5" cy="9" r="1.5"/><path d="M21 15l-5-5L7 18"/></svg>
-            写真を複数選ぶ
-          </button>
-        </div>
+        <p class="step-label">スライドショーにするフォルダ</p>
+        <button id="pickFolder" class="btn btn-primary" disabled>
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>
+          フォルダを選ぶ
+        </button>
       </div>
 
-      <p class="hint"><b>フォルダで選ぶ</b>＝フォルダごと一括（おすすめ）。うまく読み込めない時は<b>写真を複数選ぶ</b>を使ってください（確実に表示できます）。</p>
+      <p class="hint">目的の写真フォルダまで<b>タップして入り</b>、下部の<b>「選択」</b>を押すと、そのフォルダの写真がすべてスライドショーになります。</p>
 
       <div id="status" class="status"><span class="spinner"></span><span id="statusText"></span></div>
     </div>
@@ -335,8 +329,7 @@ $("signin").addEventListener("click", ()=>{
         if(resp.error){ setStatus("ログインに失敗しました（"+resp.error+"）", {err:true}); return; }
         accessToken = resp.access_token;
         $("pickFolder").disabled = false;
-        $("pickPhotos").disabled = false;
-        setStatus("ログイン済み。フォルダまたは写真を選んでください。");
+        setStatus("ログイン済み。フォルダを選んでください。");
       },
     });
   }
@@ -362,7 +355,6 @@ function refreshToken(){
    Picker を開く
    ============================================================ */
 $("pickFolder").addEventListener("click", ()=> openPicker("folder"));
-$("pickPhotos").addEventListener("click", ()=> openPicker("photos"));
 
 function openPicker(kind){
   if(!pickerReady){ setStatus("準備中です。数秒後にもう一度…", {loading:true}); return; }
@@ -416,11 +408,7 @@ async function pickerCallback(kind, data){
     }
   }catch(e){
     console.error(e);
-    if(kind==="folder"){
-      setStatus("フォルダ内の取得に失敗しました。「写真を複数選ぶ」でお試しください。", {err:true});
-    }else{
-      setStatus("読み込みに失敗しました（"+e.message+"）", {err:true});
-    }
+    setStatus("フォルダ内の写真を取得できませんでした（"+e.message+"）。別のフォルダで試すか、フォルダ直下に写真があるか確認してください。", {err:true});
   }
 }
 
