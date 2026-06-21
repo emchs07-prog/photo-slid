@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- ============================================================
-     Hideki Slide Show   ver1.04
+     Hideki Slide Show   ver1.06
      ============================================================ -->
 <html lang="ja">
 <head>
@@ -16,16 +16,15 @@
 <meta name="theme-color" content="#14110E">
 
 <!-- ===================================================================
-     ★ 設定: ここに自分の値を入れてください（手順は別途案内）
-     - CLIENT_ID : Google Cloud の OAuth クライアントID（ウェブアプリ）
-     - API_KEY   : Google Cloud の APIキー（Picker API 用）
+     ★ 設定（CLIENT_ID と API_KEY）は別ファイル config.js に書きます。
+        config.js は最初に一度だけ作れば、以後この index.html を
+        更新してもキーを貼り直す必要はありません。
      =================================================================== -->
+<script src="config.js"></script>
 <script>
-  const CLIENT_ID = "760032808755-d31mi7s0tillj7qcbtq1cl0mc5gbrp83.apps.googleusercontent.com";
-  const API_KEY   = "AIzaSyCJok1NERJS2dLteii-uaEgSarQdXT6Rzc";
-  const SCOPE     = "https://www.googleapis.com/auth/drive.file";
+  const SCOPE       = "https://www.googleapis.com/auth/drive.file";
   const APP_NAME    = "Hideki Slide Show";
-  const APP_VERSION = "1.04";
+  const APP_VERSION = "1.06";
 </script>
 
 <style>
@@ -323,8 +322,9 @@ window.addEventListener("load", ()=>{
    認証（Google Identity Services / drive.file）
    ============================================================ */
 $("signin").addEventListener("click", ()=>{
-  if(CLIENT_ID.startsWith("ここに")){
-    setStatus("CLIENT_ID と API_KEY が未設定です。HTMLの上部を編集してください。", {err:true});
+  if(typeof CLIENT_ID === "undefined" || typeof API_KEY === "undefined"
+     || !CLIENT_ID || CLIENT_ID.startsWith("ここに")){
+    setStatus("config.js が読み込めていないか、未設定です。config.js の CLIENT_ID と API_KEY を確認してください。", {err:true});
     return;
   }
   if(!tokenClient){
@@ -369,6 +369,7 @@ function openPicker(kind){
   let view;
   const builder = new google.picker.PickerBuilder()
     .setDeveloperKey(API_KEY)
+    .setAppId(typeof APP_ID !== "undefined" ? APP_ID : "")
     .setOAuthToken(accessToken)
     .setOrigin(window.location.protocol + "//" + window.location.host);
 
