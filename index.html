@@ -22,7 +22,7 @@
   const API_KEY   = "AIzaSyCJok1NERJS2dLteii-uaEgSarQdXT6Rzc";
   const SCOPE     = "https://www.googleapis.com/auth/drive.file";
   const APP_NAME    = "Hideki Slide Show";
-  const APP_VERSION = "1.01";
+  const APP_VERSION = "1.02";
 </script>
 
 <style>
@@ -285,6 +285,7 @@ let shuffled = false;
 
 const objectUrls = new Map();   // photosのindex -> objectURL（簡易キャッシュ）
 let activeLayer = null;
+let lastLoadError = "";         // 直近の画像取得エラー（診断用）
 
 /* DOM */
 const $ = id => document.getElementById(id);
@@ -403,8 +404,8 @@ async function pickerCallback(kind, data){
       startSlideshow(folder.name, files);
     }else{
       const files = docs
-        .filter(d => (d.mimeType||"").startsWith("image/"))
-        .map(d => ({id:d.id, name:d.name}));
+        .map(d => ({id:d.id, name:d.name||"photo"}))
+        .filter(f => f.id);
       if(!files.length){ setStatus("写真が選ばれていません。", {err:true}); return; }
       startSlideshow(files.length+"枚の写真", files);
     }
@@ -509,17 +510,24 @@ function rebuildOrder(){
   }
 }
 
-async function show(newPos){
+async function show(newPos, attempts){
   const total = order.length;
+  if(total===0) return;
+  attempts = attempts || 0;
+  if(attempts >= total){
+    // 全部読み込めなかった → 画面にエラーを出して止める（黙って真っ黒のままにしない）
+    failSlideshow(lastLoadError || "画像を読み込めませんでした");
+    return;
+  }
   newPos = ((newPos % total) + total) % total;
   const idx = order[newPos];
   let url;
   try{ url = await loadImage(idx); }
   catch(e){
+    lastLoadError = e.message;
     console.error(e);
-    // 1枚読めなくても止めない: 次へ送る
-    if(total>1){ pos=newPos; return show(newPos+1); }
-    return;
+    // この1枚が読めなくても次を試す（全滅したら上のattemptsガードで停止）
+    return show(newPos+1, attempts+1);
   }
   const incoming = (activeLayer===$("layerA")) ? $("layerB") : $("layerA");
   incoming.classList.toggle("fill", fillMode);
@@ -534,6 +542,16 @@ async function show(newPos){
   $("counter").textContent = (newPos+1)+" / "+total;
   preloadAround(newPos);
   revokeFar(newPos);
+}
+
+/* 全滅時：プレーヤーを閉じて、理由を設定画面に表示する */
+function failSlideshow(msg){
+  pause();
+  $("player").classList.remove("on");
+  document.body.style.background = "var(--bg)";
+  let hint = "";
+  if(/40[13]/.test(msg)) hint = "（写真へのアクセス権限が取れていない可能性があります）";
+  setStatus("写真を表示できませんでした " + hint + " [" + msg + "]", {err:true});
 }
 
 /* ============================================================
