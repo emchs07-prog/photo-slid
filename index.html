@@ -356,13 +356,14 @@ function openPicker(kind){
     .setOAuthToken(accessToken);
 
   if(kind==="folder"){
-    view = new google.picker.DocsView(google.picker.ViewId.FOLDERS)
-      .setSelectFolderEnabled(true)
+    view = new google.picker.DocsView(google.picker.ViewId.DOCS)
+      .setParent("root")
       .setIncludeFolders(true)
-      .setMimeTypes("application/vnd.google-apps.folder");
-    builder.setTitle("スライドショーにするフォルダを選ぶ");
+      .setSelectFolderEnabled(true);
+    builder.setTitle("写真フォルダを開いて『選択』を押してください");
   }else{
     view = new google.picker.DocsView(google.picker.ViewId.DOCS_IMAGES)
+      .setParent("root")
       .setIncludeFolders(true)
       .setMimeTypes("image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,image/bmp,image/tiff");
     builder.enableFeature(google.picker.Feature.MULTISELECT_ENABLED)
